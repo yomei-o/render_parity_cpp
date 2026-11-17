@@ -53,9 +53,10 @@ POST=8080 ./x64/Release/sqlpp11_cust.exe        # http://localhost:8080/html/ind
 **C++ を TiDB/MySQL で動かす（Windows・任意）**
 1. `USE_MYSQL` を定義してビルド（`database.h` 冒頭の `#define USE_MYSQL 1` を有効化、
    もしくは MSBuild を `CL=-DUSE_MYSQL`（`/D` は Git Bash がパス変換して壊すのでダッシュ）で実行）。
-2. 実行時に `libmysql.dll` を dlopen するので **PATH に通す**（TLS 用に openssl の
-   `libssl-3-x64.dll`/`libcrypto-3-x64.dll` も同じ場所に）。例：`C:\prog\mysql-8.4.4-winx64\{lib,bin}`。
-   （`libmysql.dll` は GPL のためリポジトリには入れない。`.gitignore` 済み。）
+2. 実行時に `libmysql.dll` を dlopen する。**`sh cpp/setup_local_dll.sh` を一度実行**すると、
+   ローカルの MySQL 8.4 インストール（既定 `C:\prog\mysql-8.4.4-winx64`、`MYSQL_DIR` で変更可）から
+   `libmysql.dll`＋openssl DLL を `x64/Release`・`x64/Debug`（exe の隣）にコピーする。
+   → 以後 **PATH 設定不要**で exe が DLL を隣から読む。これらの DLL は `.gitignore` 済み（ローカル専用・非コミット）。
 3. 接続情報を env で渡して起動：
    ```sh
    export PATH="/c/prog/mysql-8.4.4-winx64/lib:/c/prog/mysql-8.4.4-winx64/bin:$PATH"
