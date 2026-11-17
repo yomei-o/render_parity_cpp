@@ -8,6 +8,7 @@ USER_NAME = "xxxx"
 PASSWORD = "xxxx"
 RDS_PROXY_HOST = ""
 DB_NAME = "xxxx"
+TIDB_PORT = "4000"   # TiDB は 4000（通常の MySQL は 3306）
 
 if val := os.environ.get("USER_NAME"):
     USER_NAME = val
@@ -17,13 +18,15 @@ if val := os.environ.get("RDS_PROXY_HOST"):
     RDS_PROXY_HOST = val
 if val := os.environ.get("DB_NAME"):
     DB_NAME = val
+if val := os.environ.get("TIDB_PORT"):
+    TIDB_PORT = val
 
 
 # 既定はカレントディレクトリの SQLite（C++ 版と同じ test_db.db）。
-# 環境変数 RDS_PROXY_HOST があれば MySQL に繋ぐ。
+# 環境変数 RDS_PROXY_HOST があれば MySQL / TiDB に繋ぐ（ポート既定 4000）。
 if RDS_PROXY_HOST:
     SQLALCHEMY_DATABASE_URL = (
-        f"mysql+pymysql://{USER_NAME}:{PASSWORD}@{RDS_PROXY_HOST}/{DB_NAME}?charset=utf8mb4"
+        f"mysql+pymysql://{USER_NAME}:{PASSWORD}@{RDS_PROXY_HOST}:{TIDB_PORT}/{DB_NAME}?charset=utf8mb4"
     )
 else:
     SQLALCHEMY_DATABASE_URL = "sqlite:///./test_db.db"
@@ -52,6 +55,15 @@ if val := os.environ.get("DB_POOL_RECYCLE"):
 # SQLite はスレッド間で接続を共有できないため check_same_thread を切る
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     _pool_kwargs["connect_args"] = {"check_same_thread": False}
+# TiDB/MySQL は TLS 必須。システムCAで検証（TiDB Serverless は公的CA署名）。
+# TIDB_SSL_SKIP_VERIFY=1 で検証を外せる（自己署名のMySQL等の緊急回避用）。
+elif SQLALCHEMY_DATABASE_URL.startswith("mysql"):
+    import ssl as _ssl
+    _ctx = _ssl.create_default_context()
+    if os.environ.get("TIDB_SSL_SKIP_VERIFY") == "1":
+        _ctx.check_hostname = False
+        _ctx.verify_mode = _ssl.CERT_NONE
+    _pool_kwargs["connect_args"] = {"ssl": _ctx}
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL, **_pool_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
