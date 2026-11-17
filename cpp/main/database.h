@@ -71,12 +71,20 @@ static inline sql::connection_config& db_get_config()
         if(config.user=="")config.user = "xxxx";
         if(config.password=="")config.password = "xxxx";
         if(config.database=="")config.database = "xxxx";
+
+        // TiDB は port 4000・TLS 必須。port は env TIDB_PORT で上書き可（既定4000）。
+        {
+            std::string pe = getenv_("TIDB_PORT");
+            config.port = pe.empty() ? 4000u : (unsigned int)atoi(pe.c_str());
+        }
+        config.client_flag |= CLIENT_SSL;   // TLS を要求（プロトコル標準フラグ）
 #else
 
         config.user = "root";
         config.database = "sakila";
         config.debug = false;
         config.password = "xxxx";
+        config.port = 3306;
 #endif
 
 #else
