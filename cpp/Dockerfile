@@ -8,10 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends g++ ca-certific
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . /src
-# SQLite 版（mysql/postgre の動的ロード cpp は不要）。mbedtls は mbedtlspp.hpp 経由のユニティ include。
-RUN g++ -O2 -o lambda_server main/lambda_server.cpp sqlite/sqlite3.c \
+# SQLite 版。重要: sqlite3.c は C。g++ は .c も C++ 扱いするので、gcc(C) で別オブジェクトにして
+# から g++(C++) の本体とリンクする。mbedtls は mbedtlspp.hpp 経由のユニティ include。
+RUN gcc -O2 -c sqlite/sqlite3.c -o sqlite3.o -I sqlite
+RUN g++ -O2 -o lambda_server main/lambda_server.cpp sqlite3.o \
       -pthread --std=c++2a \
-      -I main -I gen -I date -I models -I sqlite -I sqlpp11 -I include -I openssl
+      -I main -I gen -I date -I models -I sqlite -I sqlpp11 -I include -I openssl \
+      -ldl -lm
 
 FROM debian:bookworm-slim
 RUN useradd -m app
