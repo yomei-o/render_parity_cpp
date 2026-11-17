@@ -78,6 +78,9 @@ static inline sql::connection_config& db_get_config()
             config.port = pe.empty() ? 4000u : (unsigned int)atoi(pe.c_str());
         }
         config.client_flag |= CLIENT_SSL;   // TLS を要求（プロトコル標準フラグ）
+        // MariaDB 互換 libmysqlclient は MYSQL_OPT_RECONNECT の enum 値が MySQL と違い
+        // mysql_options がエラー→sqlpp11 が例外で落ちる。auto_reconnect を切って回避。
+        config.auto_reconnect = false;
 #else
 
         config.user = "root";
