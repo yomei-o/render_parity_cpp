@@ -70,6 +70,7 @@ extern "C"
 MYSQL*  (STDCALL *pf_mysql_init)(MYSQL*)=NULL;
 void (STDCALL *pf_mysql_close)(MYSQL*)=NULL;
 int (STDCALL *pf_mysql_options)(MYSQL* , enum mysql_option,const void* )=NULL;
+bool (STDCALL *pf_mysql_ssl_set)(MYSQL*, const char*, const char*, const char*, const char*, const char*)=NULL;
 MYSQL* (STDCALL *pf_mysql_real_connect)(MYSQL* mysql, const char* host,
 	const char* user, const char* passwd,
 	const char* db, unsigned int port,
@@ -130,6 +131,13 @@ int STDCALL mysql_options(MYSQL* mysql, enum mysql_option option,
 {
 	if (pf_mysql_options == NULL)return -1;
 	return pf_mysql_options(mysql, option, arg);
+}
+
+bool STDCALL mysql_ssl_set(MYSQL* mysql, const char* key, const char* cert,
+	const char* ca, const char* capath, const char* cipher)
+{
+	if (pf_mysql_ssl_set == NULL)return 1;
+	return pf_mysql_ssl_set(mysql, key, cert, ca, capath, cipher);
 }
 
 MYSQL* STDCALL mysql_real_connect(MYSQL* mysql, const char* host,
@@ -305,6 +313,7 @@ public:
 		pf_mysql_init = (MYSQL * (STDCALL *)(MYSQL*))dll_access(g_module, "mysql_init");
 		pf_mysql_close = (void (STDCALL *)(MYSQL*))dll_access(g_module, "mysql_close");
 		pf_mysql_options = (int (STDCALL *)(MYSQL*, enum mysql_option, const void*))dll_access(g_module, "mysql_options");
+		pf_mysql_ssl_set = (bool (STDCALL *)(MYSQL*, const char*, const char*, const char*, const char*, const char*))dll_access(g_module, "mysql_ssl_set");
 		pf_mysql_real_connect = (MYSQL * (STDCALL *)(MYSQL*,const char*,const char*,const char*,
 			const char*,unsigned int,const char*,unsigned long))dll_access(g_module, "mysql_real_connect");
 		pf_mysql_server_init = (int (STDCALL *)(int, char**, char**))dll_access(g_module, "mysql_server_init");

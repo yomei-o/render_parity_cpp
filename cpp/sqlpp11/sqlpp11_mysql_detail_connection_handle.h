@@ -46,6 +46,14 @@ namespace sqlpp
           throw sqlpp::exception{"MySQL: could not set option MYSQL_OPT_CONNECT_TIMEOUT"};
         }
 
+        // client_flag に CLIENT_SSL があれば TLS を明示有効化する。
+        // mysql_ssl_set は MySQL/MariaDB 共通の ABI 安定関数（enum 値の不一致を避けられる）。
+        // 引数すべて null = クライアント証明書なし・CA検証なしで TLS を張る（TiDB は TLS 必須）。
+        if (config.client_flag & CLIENT_SSL)
+        {
+          mysql_ssl_set(mysql, nullptr, nullptr, nullptr, nullptr, nullptr);
+        }
+
         if (!mysql_real_connect(mysql, config.host.empty() ? nullptr : config.host.c_str(),
                                 config.user.empty() ? nullptr : config.user.c_str(),
                                 config.password.empty() ? nullptr : config.password.c_str(), nullptr, config.port,
