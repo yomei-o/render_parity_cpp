@@ -1,0 +1,43 @@
+# secrets（絶対にコミットしない）
+secrets/
+*.env
+!*.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.log
+
+# sqlite のローカルデータ
+test_db.db
+*.db
+
+# C++ / Visual Studio ビルド成果物
+.vs/
+cpp/x64/
+cpp/Win32/
+cpp/ARM64/
+cpp/Debug/
+cpp/Release/
+x64/
+Debug/
+Release/
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.idb
+enc_temp_folder/
+
+# Lambda パッケージング成果物
+cpp/lambda_server
+cpp/image/
+cpp/build_image.zip
+python/image/
+python/*.zip
+
+# OS
+.DS_Store
+Thumbs.db

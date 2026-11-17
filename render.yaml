@@ -1,0 +1,39 @@
+# Render Blueprint（2サービス）: 同じパスキーAPIを FastAPI(Python) と cpp-httplib(C++) で公開。
+# リポジトリ直下に置く。Render ダッシュボードの "New +" → "Blueprint" でこのリポを指定して作成。
+#
+# 注意:
+# - どちらのサーバもポートは環境変数 POST を読む（PORT ではない）。Render は PORT を注入するので橋渡しする。
+# - 既定は SQLite（揮発ディスク）。永続化するなら TiDB Cloud(MySQL) を envVars で指定（下のコメント参照）。
+# - ヘルスチェックは /html/index.html（200 を返す）を使う。
+services:
+  # --- FastAPI（ネイティブ Python ランタイム）---
+  - type: web
+    name: render-parity-python
+    runtime: python
+    rootDir: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn lambda_server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /html/index.html
+    autoDeployTrigger: commit
+    # TiDB Cloud(MySQL) を使うとき（コンソールで設定、ここに値は書かない）:
+    # envVars:
+    #   - key: RDS_PROXY_HOST   # <cluster>.tidbcloud.com
+    #     sync: false
+    #   - key: USER_NAME
+    #     sync: false
+    #   - key: PASSWORD
+    #     sync: false
+    #   - key: DB_NAME
+    #     sync: false
+
+  # --- cpp-httplib（Docker ランタイム）---
+  - type: web
+    name: render-parity-cpp
+    runtime: docker
+    plan: free
+    dockerfilePath: ./cpp/Dockerfile
+    dockerContext: ./cpp
+    healthCheckPath: /html/index.html
+    autoDeployTrigger: commit
+    # TiDB を使うときは USE_MYSQL ビルド＋ libmysqlclient が要る（cpp/Dockerfile のコメント参照）。
