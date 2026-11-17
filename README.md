@@ -40,12 +40,34 @@ pip install -r requirements.txt
 POST=8080 python lambda_server.py                      # http://localhost:8080/html/index.html
 ```
 
-**C++（cpp-httplib）**
-- Windows: `cpp/sqlpp11_cust.sln` を VS2022 で Release ビルド → `POST=8080 server.exe`
-- Linux/Docker:
-  ```sh
-  cd cpp && docker build -t parity-cpp . && docker run -e PORT=8080 -p 8080:8080 parity-cpp
-  ```
+**C++（cpp-httplib）— Windows ローカル**
+
+既定は **SQLite（依存ゼロ）**。`cpp/sqlpp11_cust.sln` を VS2022 で Release/x64 ビルド →
+`cpp/` ディレクトリ（`html/` がある場所）から起動する：
+```sh
+cd cpp
+POST=8080 ./x64/Release/sqlpp11_cust.exe        # http://localhost:8080/html/index.html
+# DB はカレントに test_db.db を自動作成。DLL 不要。
+```
+
+**C++ を TiDB/MySQL で動かす（Windows・任意）**
+1. `USE_MYSQL` を定義してビルド（`database.h` 冒頭の `#define USE_MYSQL 1` を有効化、
+   もしくは MSBuild を `CL=-DUSE_MYSQL`（`/D` は Git Bash がパス変換して壊すのでダッシュ）で実行）。
+2. 実行時に `libmysql.dll` を dlopen するので **PATH に通す**（TLS 用に openssl の
+   `libssl-3-x64.dll`/`libcrypto-3-x64.dll` も同じ場所に）。例：`C:\prog\mysql-8.4.4-winx64\{lib,bin}`。
+   （`libmysql.dll` は GPL のためリポジトリには入れない。`.gitignore` 済み。）
+3. 接続情報を env で渡して起動：
+   ```sh
+   export PATH="/c/prog/mysql-8.4.4-winx64/lib:/c/prog/mysql-8.4.4-winx64/bin:$PATH"
+   RDS_PROXY_HOST=... TIDB_PORT=4000 USER_NAME=... PASSWORD=... DB_NAME=test \
+   POST=8080 ./x64/Release/sqlpp11_cust.exe
+   ```
+
+**C++ — Linux/Docker**
+```sh
+cd cpp && docker build -t parity-cpp . && docker run -e PORT=8080 -p 8080:8080 \
+  -e RDS_PROXY_HOST=... -e TIDB_PORT=4000 -e USER_NAME=... -e PASSWORD=... -e DB_NAME=test parity-cpp
+```
 
 ## Render へのデプロイ
 
