@@ -21,6 +21,8 @@ RUN useradd -m app
 WORKDIR /app
 COPY --from=build /src/lambda_server /app/lambda_server
 COPY --from=build /src/html /app/html
+# SQLite(test_db.db) を CWD に作れるよう /app を app 所有にする（無料枠はディスク揮発＝永続化はTiDBで）
+RUN chown -R app:app /app
 USER app
 EXPOSE 10000
 # Render は PORT を注入する。サーバは環境変数 POST を読むので橋渡しする。
