@@ -407,8 +407,12 @@ def consume_challenge(db: Session, cd: dict, purpose: str) -> dict:
     if row is None:
         raise PasskeyError("challenge not found")
     info = {"user": row.user or "", "user_handle": row.user_handle or "", "expire": row.expire}
-    db.delete(row)
+    # 同時に 2 つのリクエストが同じ challenge を引いても、消せるのは片方だけ
+    n = db.query(model_passkey.PasskeyChallenge).filter(
+        model_passkey.PasskeyChallenge.id == row.id).delete(synchronize_session=False)
     db.commit()
+    if n == 0:
+        raise PasskeyError("challenge not found")
     if info["expire"] < utcnow():
         raise PasskeyError("challenge expired")
     return info

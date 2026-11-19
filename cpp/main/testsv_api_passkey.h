@@ -126,7 +126,7 @@ namespace passkey {
 
     static inline bytes random_bytes(size_t n)
     {
-        static std::random_device rd;
+        thread_local std::random_device rd;   // MySQL 版は API が並行に走るのでスレッドごとに持つ
         bytes b(n);
         for (size_t i = 0; i < n; i++) {
             b[i] = (uint8_t)(rd() & 0xff);
@@ -432,6 +432,9 @@ namespace passkey {
     static inline int check_cose_key(const bytes& cose, const bytes* sig = nullptr,
                                      const bytes* data = nullptr, bool* ok = nullptr)
     {
+        // mbedtls はスレッド対応（MBEDTLS_THREADING_C）無しで入れているので、鍵の検査と署名検証は 1 つずつ
+        static std::mutex mbedtls_mtx;
+        std::lock_guard<std::mutex> lock(mbedtls_mtx);
         Cbor key;
         cbor_decode(cose, 0, key);
         if (key.type != Cbor::MAP) throw PasskeyError("unsupported algorithm");
@@ -567,7 +570,8 @@ namespace passkey {
             break;
         }
         if (id < 0) throw PasskeyError("challenge not found");
-        db(remove_from(tab).where(tab.id == id));
+        // 同時に 2 つのリクエストが同じ challenge を引いても、消せるのは片方だけ
+        if (db(remove_from(tab).where(tab.id == id)) == 0) throw PasskeyError("challenge not found");
         if (db_to_time(expire) < time(NULL)) throw PasskeyError("challenge expired");
         return info;
     }
@@ -1393,18 +1397,23 @@ namespace passkey {
 
     typedef json(*api_func)(sql::connection&, const json&, const std::string&, const Request&);
 
-    // DB は 1 本の接続を共有しているので、API 1 回分を丸ごと排他にする
-    // （チャレンジの「引いて消す」を 2 つのリクエストが同時にやらないように）
+    // SQLite は 1 本の接続を共有しているので、API 1 回分を丸ごと排他にする。
+    // MySQL(TiDB) はスレッドごとに接続を持つ（database.h）ので排他しない
+    // （チャレンジの「引いて消す」は consume_challenge が消せた件数で 1 回きりを保証する）。
     static inline void run(api_func f, const Request& req, Response& res)
     {
+#ifndef USE_MYSQL
         static std::mutex mtx;
+#endif
         std::string auth = get_auth(req);
         if (auth == "error") auth = "";
         json body = get_request(req);
         if (!body.is_object()) body = json::object();
         json ret;
         {
+#ifndef USE_MYSQL
             std::lock_guard<std::mutex> lock(mtx);
+#endif
             try {
                 ret = f(get_sql_connection(), body, auth, req);
             }
@@ -1413,9 +1422,11 @@ namespace passkey {
             }
             catch (const std::exception& e) {
                 fprintf(stderr, "#### passkey error: %s\n", e.what());
+                db_reset_connection();   // 切れた接続かもしれないので捨てて、次で張り直す
                 ret = { {"status", "fail"}, {"message", "invalid request"} };
             }
             catch (...) {
+                db_reset_connection();
                 ret = { {"status", "fail"}, {"message", "invalid request"} };
             }
         }

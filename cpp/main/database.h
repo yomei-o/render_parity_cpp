@@ -12,6 +12,7 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <memory>
 
 #include "json.hpp"
 
@@ -54,14 +55,15 @@ static inline void db_global_init()
         }
 }
 
-static inline sql::connection_config& db_get_config()
+// 設定は最初の 1 回だけ作る（複数スレッドから同時に呼ばれても安全なように関数内 static で）
+static inline sql::connection_config db_make_config()
 {
-        static sql::connection_config config;
+        sql::connection_config config;
         db_global_init();
 #ifdef USE_MYSQL
 
 #ifdef  USE_MYSQL_ENV
-                config.host = getenv_("RDS_PROXY_HOST"); //"xxxx.rds.amazonaws.com";
+        config.host = getenv_("RDS_PROXY_HOST"); //"xxxx.rds.amazonaws.com";
         config.user = getenv_("USER_NAME"); //"xxxx";
         config.password = getenv_("PASSWORD"); // "xxxx";
         config.database = getenv_("DB_NAME"); // "xxxx";
@@ -98,11 +100,57 @@ static inline sql::connection_config& db_get_config()
         return config;
 }
 
+static inline const sql::connection_config& db_get_config()
+{
+        static const sql::connection_config config = db_make_config();
+        return config;
+}
+
+#ifdef USE_MYSQL
+// MySQL(TiDB) はスレッドごとに接続を 1 本持つ（httplib のワーカースレッドごと）。
+// 1 本を全員で順番に使うと、遠い DB（Render オレゴン→TiDB 東京で 1 往復 100ms 超）では
+// リクエストが詰まり、ヘルスチェックまで待たされて Render に再起動され 502 になった。
+//   ・しばらく使っていない接続は相手（TiDB）に切られているかもしれないので張り直す
+//   ・DB のエラーが出た接続は db_reset_connection() で捨て、次のリクエストで張り直す
+static const time_t DB_IDLE_RECONNECT_SEC = 240;
+
+struct db_thread_conn {
+        std::unique_ptr<sql::connection> conn;
+        time_t last_used = 0;
+};
+
+static inline db_thread_conn& db_thread_slot()
+{
+        thread_local db_thread_conn slot;
+        return slot;
+}
+
+static inline sql::connection& get_sql_connection()
+{
+        db_thread_conn& s = db_thread_slot();
+        time_t now = time(NULL);
+        if (s.conn && now - s.last_used > DB_IDLE_RECONNECT_SEC) s.conn.reset();
+        if (!s.conn) s.conn = std::make_unique<sql::connection>(db_get_config());
+        s.last_used = now;
+        return *s.conn;
+}
+
+static inline void db_reset_connection()
+{
+        db_thread_slot().conn.reset();
+}
+#else
+// SQLite（ローカル用）は 1 本を共有し、呼ぶ側（run）で API 1 回分を排他にする
 static inline sql::connection& get_sql_connection()
 {
     static sql::connection db_a(db_get_config());
     return db_a;
 }
+
+static inline void db_reset_connection()
+{
+}
+#endif
 
 #endif
 

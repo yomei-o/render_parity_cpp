@@ -902,8 +902,15 @@ if (!supported()) {
 }
 
 refreshAll();
-// 承認された・電気が切り替わった・メンバーが増えた、を拾う
-setInterval(() => refreshAll(true).catch(() => {}), 3000);
+// 承認された・電気が切り替わった・メンバーが増えた、を拾う。
+// 前の回が終わっていなければ飛ばす（サーバが遅いと回が重なって、詰まる一方になる）。
+// タブが裏にある間は問い合わせない。
+let polling = false;
+setInterval(async () => {
+  if (polling || document.hidden) return;
+  polling = true;
+  try { await refreshAll(true); } catch (e) {} finally { polling = false; }
+}, 3000);
 </script>
 </body>
 </html>
