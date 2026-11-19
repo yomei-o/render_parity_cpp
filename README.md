@@ -6,6 +6,16 @@
 元サンプル: [yomei-o/passkey_server_cpp](https://github.com/yomei-o/passkey_server_cpp) の `src/server_sample`。
 Python/C++ の**機能パリティ**を保つのが方針（速度は別）。
 
+## 動いているサーバ（Render 無料枠）
+
+| 実装 | URL |
+|---|---|
+| C++（cpp-httplib, Docker） | https://render-parity-cpp.onrender.com/html/index.html |
+| Python（FastAPI） | https://render-parity-python.onrender.com/html/index.html |
+
+両方とも同じ TiDB Cloud を DB に使っている。無料枠なので 15 分アクセスが無いと止まり、
+次の最初のアクセスは起動待ちになる（実測: C++ 約 13 秒、Python 約 33〜37 秒）。
+
 ## 構成
 
 ```
