@@ -27,6 +27,7 @@
 # C++ 版は cpp/main/testsv_api_passkey.h。検査の順番と失敗時の message を揃えてある。
 #
 from fastapi import APIRouter, Request, Header, Depends
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 import base64
@@ -945,13 +946,21 @@ def run(db: Session, func, *args) -> dict:
         return fail("invalid request")
 
 
+# ハンドラは async（body を await で読む）なので、同期の DB 処理をそのまま呼ぶと
+# DB の往復を待つ間イベントループ全体が止まり、全リクエストが 1 本ずつになる
+# （遠い TiDB だと詰まってヘルスチェックも返せず、Render に再起動されて 502）。
+# DB 処理はスレッドプールで走らせる。
+async def arun(db: Session, func, *args) -> dict:
+    return await run_in_threadpool(run, db, func, *args)
+
+
 @router.post("/passkey/v0/register_options")
 async def api_passkey_register_options(request: Request,
     authorization: str = Header(None),
     db: Session = Depends(get_db),
     ):
     body = await read_body(request)
-    return run(db, passkey_register_options, extract_bearer_token(authorization), body, request)
+    return await arun(db, passkey_register_options, extract_bearer_token(authorization), body, request)
 
 
 @router.post("/passkey/v0/register_verify")
@@ -960,7 +969,7 @@ async def api_passkey_register_verify(request: Request,
     db: Session = Depends(get_db),
     ):
     body = await read_body(request)
-    return run(db, passkey_register_verify, extract_bearer_token(authorization), body, request)
+    return await arun(db, passkey_register_verify, extract_bearer_token(authorization), body, request)
 
 
 @router.post("/passkey/v0/login_options")
@@ -968,7 +977,7 @@ async def api_passkey_login_options(request: Request,
     db: Session = Depends(get_db),
     ):
     body = await read_body(request)
-    return run(db, passkey_login_options, body, request)
+    return await arun(db, passkey_login_options, body, request)
 
 
 @router.post("/passkey/v0/login_verify")
@@ -976,7 +985,7 @@ async def api_passkey_login_verify(request: Request,
     db: Session = Depends(get_db),
     ):
     body = await read_body(request)
-    return run(db, passkey_login_verify, body, request)
+    return await arun(db, passkey_login_verify, body, request)
 
 
 @router.post("/passkey/v0/me")
@@ -984,7 +993,7 @@ async def api_passkey_me(request: Request,
     authorization: str = Header(None),
     db: Session = Depends(get_db),
     ):
-    return run(db, passkey_me, extract_bearer_token(authorization))
+    return await arun(db, passkey_me, extract_bearer_token(authorization))
 
 
 @router.post("/passkey/v0/logout")
@@ -992,7 +1001,7 @@ async def api_passkey_logout(request: Request,
     authorization: str = Header(None),
     db: Session = Depends(get_db),
     ):
-    return run(db, passkey_logout, extract_bearer_token(authorization))
+    return await arun(db, passkey_logout, extract_bearer_token(authorization))
 
 
 @router.post("/passkey/v0/list")
@@ -1000,7 +1009,7 @@ async def api_passkey_list(request: Request,
     authorization: str = Header(None),
     db: Session = Depends(get_db),
     ):
-    return run(db, passkey_list, extract_bearer_token(authorization))
+    return await arun(db, passkey_list, extract_bearer_token(authorization))
 
 
 @router.post("/passkey/v0/delete")
@@ -1009,7 +1018,7 @@ async def api_passkey_delete(request: Request,
     db: Session = Depends(get_db),
     ):
     body = await read_body(request)
-    return run(db, passkey_delete, extract_bearer_token(authorization), body)
+    return await arun(db, passkey_delete, extract_bearer_token(authorization), body)
 
 
 @router.post("/account/v0/list")
@@ -1017,7 +1026,7 @@ async def api_account_list(request: Request,
     authorization: str = Header(None),
     db: Session = Depends(get_db),
     ):
-    return run(db, account_list, extract_bearer_token(authorization))
+    return await arun(db, account_list, extract_bearer_token(authorization))
 
 
 @router.post("/account/v0/demote")
@@ -1026,7 +1035,7 @@ async def api_account_demote(request: Request,
     db: Session = Depends(get_db),
     ):
     body = await read_body(request)
-    return run(db, account_demote, extract_bearer_token(authorization), body)
+    return await arun(db, account_demote, extract_bearer_token(authorization), body)
 
 
 @router.post("/account/v0/admin_request")
@@ -1034,7 +1043,7 @@ async def api_account_admin_request(request: Request,
     authorization: str = Header(None),
     db: Session = Depends(get_db),
     ):
-    return run(db, account_admin_request, extract_bearer_token(authorization))
+    return await arun(db, account_admin_request, extract_bearer_token(authorization))
 
 
 @router.post("/account/v0/admin_request_cancel")
@@ -1042,7 +1051,7 @@ async def api_account_admin_request_cancel(request: Request,
     authorization: str = Header(None),
     db: Session = Depends(get_db),
     ):
-    return run(db, account_admin_request_cancel, extract_bearer_token(authorization))
+    return await arun(db, account_admin_request_cancel, extract_bearer_token(authorization))
 
 
 @router.post("/account/v0/admin_requests")
@@ -1050,7 +1059,7 @@ async def api_account_admin_requests(request: Request,
     authorization: str = Header(None),
     db: Session = Depends(get_db),
     ):
-    return run(db, account_admin_requests, extract_bearer_token(authorization))
+    return await arun(db, account_admin_requests, extract_bearer_token(authorization))
 
 
 @router.post("/account/v0/admin_approve")
@@ -1059,7 +1068,7 @@ async def api_account_admin_approve(request: Request,
     db: Session = Depends(get_db),
     ):
     body = await read_body(request)
-    return run(db, account_admin_approve, extract_bearer_token(authorization), body)
+    return await arun(db, account_admin_approve, extract_bearer_token(authorization), body)
 
 
 @router.post("/account/v0/admin_reject")
@@ -1068,7 +1077,7 @@ async def api_account_admin_reject(request: Request,
     db: Session = Depends(get_db),
     ):
     body = await read_body(request)
-    return run(db, account_admin_reject, extract_bearer_token(authorization), body)
+    return await arun(db, account_admin_reject, extract_bearer_token(authorization), body)
 
 
 @router.post("/account/v0/delete")
@@ -1077,4 +1086,4 @@ async def api_account_delete(request: Request,
     db: Session = Depends(get_db),
     ):
     body = await read_body(request)
-    return run(db, account_delete, extract_bearer_token(authorization), body)
+    return await arun(db, account_delete, extract_bearer_token(authorization), body)

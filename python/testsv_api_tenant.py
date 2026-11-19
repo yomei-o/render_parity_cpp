@@ -41,7 +41,7 @@ from testsv_api_passkey import (
     get_session,
     read_body,
     role_of,
-    run,
+    arun,
     session_user,
     utcnow,
     valid_user_name,
@@ -323,8 +323,8 @@ def route(path, func, with_body=True):
                       db: Session = Depends(get_db)):
         skey = extract_bearer_token(authorization)
         if with_body:
-            return run(db, func, skey, await read_body(request))
-        return run(db, func, skey)
+            return await arun(db, func, skey, await read_body(request))
+        return await arun(db, func, skey)
     handler.__name__ = "api_tenant_" + func.__name__
     router.post(path)(handler)
 
