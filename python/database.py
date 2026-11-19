@@ -64,6 +64,12 @@ elif SQLALCHEMY_DATABASE_URL.startswith("mysql"):
         _ctx.check_hostname = False
         _ctx.verify_mode = _ssl.CERT_NONE
     _pool_kwargs["connect_args"] = {"ssl": _ctx}
+    # 既定のプール（常駐 5 本＋はみ出し分は使うたびに張って閉じる）だと、ページが API を 6 本以上
+    # 同時に投げたとき毎回 TLS 接続を張り直し、遠い TiDB では 1 本あたり +0.8 秒ほどかかった。
+    # 常駐を増やし、TiDB 側にアイドルで切られる前に張り直す（env で上書き可）。
+    _pool_kwargs["pool_size"] = int(os.environ.get("DB_POOL_SIZE", "16"))
+    _pool_kwargs["max_overflow"] = int(os.environ.get("DB_MAX_OVERFLOW", "16"))
+    _pool_kwargs.setdefault("pool_recycle", 240)
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL, **_pool_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
